@@ -1,0 +1,83 @@
+name: CMake
+
+on:
+  push:
+    branches: [ cmake-workflow ]
+  pull_request:
+    branches: [ cmake-workflow ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  build-on-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+    - run:   |
+             sudo apt update
+             sudo apt install gcc-12 g++-12
+    
+    - name: Install dependences
+      run: sudo apt-get remove libunwind-14 -y; sudo apt-get install -y libgoogle-glog-dev libgflags-dev libgtest-dev libsqlite3-dev libqt5webkit5-dev python3-pybind11 libcurl4-openssl-dev
+
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DWITH_GCOV=OFF -DWITH_ASAN=OFF -DWITH_GLOG=OFF -DWITH_SQLITE=ON -DWITH_TEST=ON -DWITH_SIMULATOR=ON -DWITH_GAMES=ON
+      shell: bash
+      env:
+       CC:   gcc-12
+       CXX:  g++-12
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j15
+      shell: bash
+      env:
+       CC:   gcc-12
+       CXX:  g++-12
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+
+  build-on-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - name: Install dependences
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          git
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-make
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-qtwebkit
+          mingw-w64-x86_64-gflags
+          mingw-w64-x86_64-gtest
+          mingw-w64-x86_64-glog
+          mingw-w64-x86_64-pybind11
+
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Configure CMake
+      run: cmake -G "MinGW Makefiles" -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DWITH_GCOV=OFF -DWITH_ASAN=OFF -DWITH_GLOG=OFF -DWITH_SQLITE=ON -DWITH_TEST=ON -DWITH_SIMULATOR=ON -DWITH_GAMES=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
+    - name: Build
+      working-directory: build
+      run: mingw32-make -j15
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+      
